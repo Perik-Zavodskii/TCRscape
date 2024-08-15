@@ -104,7 +104,6 @@ def CountCDR3(AIRR, gated_GEX):
     AB.sort_values(by='locus', axis=0, ascending=True, inplace=True)
     AB = AB[["Cell_Index", 'locus_cdr3_aa']]
     AB = AB.groupby("Cell_Index")['locus_cdr3_aa'].apply(lambda x: '___'.join(x.astype(str))).reset_index()
-    AB
     AB = AB[AB["locus_cdr3_aa"].str.contains("TRA_") == True]
     AB = AB[AB["locus_cdr3_aa"].str.contains("TRB_") == True]
     AB = AB[AB["locus_cdr3_aa"].str.contains("TRA_nan") == False]
