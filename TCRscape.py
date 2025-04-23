@@ -1,3 +1,5 @@
+# https://github.com/Perik-Zavodskii/TCRscape
+
 import bioinfokit as bik
 from bioinfokit.analys import norm
 import numpy as np
@@ -40,10 +42,9 @@ def MergeRhapsody(list):
     return MergedRhapsody
 
 def LogNormalize(GEX_list):
-    nm = norm()
     Rhapsody_nosample = GEX_list.drop('Sample', axis=1)
-    nm.cpm(df=Rhapsody_nosample)
-    cpm = nm.cpm_norm
+    total_counts = Rhapsody_nosample.sum(axis=1)
+    cpm = Rhapsody_nosample.div(total_counts, axis=0) * 1e5
     cpm = cpm.replace({0: 1})
     cpm_log = cpm.map(np.log)
     cpm_log['Sample'] = GEX_list['Sample']
@@ -327,4 +328,51 @@ def TCRscape(norm_GEX, AIRR, features_to_cluster, min_clones):
     TCRscape["TCR_Type"] = TCRscape["TCR_Type"].astype(int)
     TCRscape = pd.get_dummies(TCRscape, columns=['Clonotype'], dtype=int)
     TCRscape.set_index(['Cell_Index'], inplace=True)
+    # Filter productive chains from AIRR matrix
+    alpha = AIRR[(AIRR['locus'] == 'TRA') & (AIRR['productive'] == True)]
+    beta  = AIRR[(AIRR['locus'] == 'TRB') & (AIRR['productive'] == True)]
+    gamma = AIRR[(AIRR['locus'] == 'TRG') & (AIRR['productive'] == True)]
+    delta = AIRR[(AIRR['locus'] == 'TRD') & (AIRR['productive'] == True)]
+    # Keep only top UMI chain per cell
+    alpha = alpha.sort_values(['cell_id', 'umi_count'], ascending=False).drop_duplicates('cell_id')
+    beta  = beta.sort_values(['cell_id', 'umi_count'], ascending=False).drop_duplicates('cell_id')
+    gamma = gamma.sort_values(['cell_id', 'umi_count'], ascending=False).drop_duplicates('cell_id')
+    delta = delta.sort_values(['cell_id', 'umi_count'], ascending=False).drop_duplicates('cell_id')
+    # Rename for clarity and merge αβ and γδ chains separately
+    ab = pd.merge(
+        alpha.rename(columns={'v_call': 'TRAV', 'j_call': 'TRAJ'}),
+        beta.rename(columns={'v_call': 'TRBV', 'd_call': 'TRBD', 'j_call': 'TRBJ'}),
+        on='cell_id', how='inner'
+    )
+    gd = pd.merge(
+        gamma.rename(columns={'v_call': 'TRGV', 'j_call': 'TRGJ'}),
+        delta.rename(columns={'v_call': 'TRDV', 'd_call': 'TRDD', 'j_call': 'TRDJ'}),
+     on='cell_id', how='inner'
+    )
+    # Add binary TCR type label
+    ab['TCR_type'] = 1  # alpha-beta
+    gd['TCR_type'] = 0  # gamma-delta
+    # Combine the two TCR types
+    tcr_df = pd.concat([ab, gd], ignore_index=True)
+    # One-hot encode V, D, J genes only relevant to TCR type
+    ab_vdj = pd.get_dummies(
+      ab[['TRAV', 'TRAJ', 'TRBV', 'TRBD', 'TRBJ']],
+      prefix=['TRAV', 'TRAJ', 'TRBV', 'TRBD', 'TRBJ']
+    )
+    gd_vdj = pd.get_dummies(
+        gd[['TRGV', 'TRGJ', 'TRDV', 'TRDD', 'TRDJ']],
+       prefix=['TRGV', 'TRGJ', 'TRDV', 'TRDD', 'TRDJ']
+    )
+    # Add TCR_type to each encoded set
+    ab_vdj['TCR_type'] = 1
+    gd_vdj['TCR_type'] = 0
+    # Index on cell_id
+    ab_vdj.index = ab['cell_id']
+    gd_vdj.index = gd['cell_id']
+    # Final VDJ one-hot matrix
+    vdj_onehot = pd.concat([ab_vdj, gd_vdj])
+    vdj_onehot = vdj_onehot.fillna(0)
+    vdj_onehot.index.name = 'Cell_Index'
+    vdj_onehot = vdj_onehot.map(lambda x: 1 if x else 0)
+    TCRscape = TCRscape.join(vdj_onehot, how='inner')
     return TCRscape
