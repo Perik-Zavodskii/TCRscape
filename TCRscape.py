@@ -1,7 +1,5 @@
 # https://github.com/Perik-Zavodskii/TCRscape
 
-import bioinfokit as bik
-from bioinfokit.analys import norm
 import numpy as np
 import pandas as pd
 import seaborn as sns
