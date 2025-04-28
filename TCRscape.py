@@ -7,8 +7,6 @@ import scipy.stats as stats
 from scipy.io import mmread
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import bioinfokit as bik
-from bioinfokit import analys, visuz
 from sklearn.decomposition import PCA
 import umap.umap_ as umap
 import hdbscan
